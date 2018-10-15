@@ -2,7 +2,6 @@
 # multiple input paths allowed
 # relative to cmake root dir
 PATH_IN = media_transport/avb_streamhandler/private
-#PATH_IN = KC--3.0_H-media_transport--avb_streamhandler/git/private
 
 # trigger IO print outs
 DEBUG = 0
