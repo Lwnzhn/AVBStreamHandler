@@ -44,6 +44,8 @@ add_library( ias-media_transport-avb_streamhandler SHARED
     private/src/avb_streamhandler/IasDiaLogger.cpp
     private/src/avb_streamhandler/IasAvbDiagnosticPacket.cpp
     private/src/avb_streamhandler/IasLocalAudioBufferDesc.cpp
+    private/src/avb_video_common/IasAvbVideoCondVar.cpp
+    private/src/avb_video_common/IasAvbVideoLog.cpp
     private/src/avb_video_common/IasAvbVideoShmConnection.cpp
     private/src/avb_video_common/IasAvbVideoRingBuffer.cpp
     private/src/avb_video_common/IasAvbVideoRingBufferFactory.cpp
@@ -82,10 +84,10 @@ target_compile_options( ias-media_transport-avb_streamhandler PUBLIC -O3 )
 
 include_directories(${AUDIO_COMMON_INCLUDE_DIRS})
 
-#find_library( AUDIO_COMMON_LIB "libias-audio-common.so" PATHS "${PKG_CONFIG_SYSROOT_DIR}/opt/audio/lib" )
-
 set_target_properties( ias-media_transport-avb_streamhandler PROPERTIES VERSION ${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_STRING} SOVERSION ${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_STRING} )
 
 target_link_libraries( ias-media_transport-avb_streamhandler ias-audio-common )
 target_link_libraries( ias-media_transport-avb_streamhandler ias-media_transport-lib_ptp_daemon )
 target_link_libraries( ias-media_transport-avb_streamhandler ias-media_transport-avb_helper )
+
+install(TARGETS ias-media_transport-avb_streamhandler DESTINATION ${CMAKE_INSTALL_LIBDIR})

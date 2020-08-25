@@ -19,6 +19,7 @@
 #include "avb_video_common/IasAvbVideoCommonTypes.hpp"
 #include "avb_video_common/IasAvbVideoRingBufferResult.hpp"
 
+#include <dlt/dlt.h>
 
 namespace IasMediaTransportAvb {
 
@@ -51,6 +52,7 @@ class __attribute__ ((visibility ("default"))) IasAvbVideoRingBuffer
      * @param[in]  dataBuf        The real data buffer
      * @param[in]  shared         Reserved for later use
      * @param[in]  ringBufShm     Pointer to the IasAvbVideoRingBufferShm
+     * @param[in]  dltContext     Log context
      *
      * @returns                   eIasRingBuffOk on success, otherwise an error code.
      */
@@ -83,11 +85,12 @@ class __attribute__ ((visibility ("default"))) IasAvbVideoRingBuffer
      * entries to be written.
      *
      * @param[in]  access      Specifies the access type (either eIasRingBufferAccessRead or eIasRingBufferAccessWrite).
+     * @param[in]  pid         Caller pid. Must match a previous registered pid for read access. Ignored for write access.
      * @param[out] numBuffers  Returned number of buffers (packets) that are ready to be processed.
      *
      * @returns                eIasRingBuffOk on success, otherwise an error code.
      */
-    IasVideoRingBufferResult updateAvailable(IasRingBufferAccess access, uint32_t *numBuffers);
+    IasVideoRingBufferResult updateAvailable(IasRingBufferAccess access, pid_t pid, uint32_t *numBuffers);
 
     /*!
      * @brief Request to access the video ring buffer
@@ -98,6 +101,7 @@ class __attribute__ ((visibility ("default"))) IasAvbVideoRingBuffer
      * buffer is full (playback) or empty (capture).
      *
      * @param[in]     access  Specifies the access type (either eIasRingBufferAccessRead or eIasRingBufferAccessWrite).
+     * @param[in]     pid     Caller pid. Must match a previous registered pid for read access. Ignored for write access.
      * @param[out]    dataPtr Returned mmap'ed base pointer to the data packets.
      * @param[out]    offset  Returned mmap offset in buffers (== packets).
      * @param[in,out] numBuffers  mmap area portion size in buffers (wanted on entry, contiguous available on exit).
@@ -105,6 +109,7 @@ class __attribute__ ((visibility ("default"))) IasAvbVideoRingBuffer
      * @returns                eIasRingBuffOk on success, otherwise an error code.
      */
     IasVideoRingBufferResult beginAccess(IasRingBufferAccess access,
+                                         pid_t pid,
                                          void **dataPtr,
                                          uint32_t *offset,
                                          uint32_t *numBuffers);
@@ -121,24 +126,26 @@ class __attribute__ ((visibility ("default"))) IasAvbVideoRingBuffer
      * IasAvbVideoRingBuffer::endAccess().
      *
      * @param[in] access  Specifies the access type (either eIasRingBufferAccessRead or eIasRingBufferAccessWrite).
+     * @param[in] pid     Caller pid. Must match a previous registered pid for read access. Ignored for write access.
      * @param[in] offset  Offset in buffers (== packets), must be equal to the offset value that
      *                    IasAvbVideoRingBuffer::beginAccess() returned.
      * @param[in] numBuffers  mmap area portion size in buffers (== number of packets that have been processed)
      *
      * @returns                eIasRingBuffOk on success, otherwise an error code.
      */
-    IasVideoRingBufferResult endAccess(IasRingBufferAccess access, uint32_t offset, uint32_t numBuffers);
+    IasVideoRingBufferResult endAccess(IasRingBufferAccess access, pid_t pid, uint32_t offset, uint32_t numBuffers);
 
     /*!
      * @brief function to read from ring buffer (with timeout) when a desired buffer level is reached.
      *        the function either returns when a timeout occurs or when the level is reached.
      *
+     * @param[in] pid         Caller pid. Must match a previous registered pid for read access.
      * @param[in] numBuffers  the desired buffer level, must be > 0 and >= total number of buffers
      * @param[in] timeout_ms  timeout in ms, function will return if buffer level is not reached within timeout, must be > 0
      *
      * @returns                eIasRingBuffOk on success, otherwise an error code.
      */
-    IasVideoRingBufferResult waitRead(uint32_t numBuffers, uint32_t timeout_ms);
+    IasVideoRingBufferResult waitRead(pid_t pid, uint32_t numBuffers, uint32_t timeout_ms);
 
     /*!
      * @brief function to write to ring buffer (with timeout) when a desired buffer level is reached.
@@ -178,24 +185,6 @@ class __attribute__ ((visibility ("default"))) IasAvbVideoRingBuffer
     uint32_t getBufferSize() const;
 
     /*!
-     * @brief Reset the readOffset and the writeOffset to zero, so that the ring buffer appears to be empty.
-     *
-     * The function is intended to be called by the writer thread, while there is no write access in progress.
-     * The function applies a mutex, so that the readOffset is not modified while the reader thread reads
-     * from the buffer.
-     */
-    void resetFromWriter();
-
-    /*!
-     * @brief Reset the readOffset and the writeOffset to zero, so that the ring buffer will be empty again.
-     *
-     * The function is intended to be called by the reader thread, while there is no read access in progress.
-     * The function applies a mutex, so that the writeOffset is not modified while the writer thread writes
-     * into the buffer.
-     */
-    void resetFromReader();
-
-    /*!
      * @brief Set the name of the ring buffer.
      *
      * This function is called by the buffer factory to give the ring buffer a name.
@@ -212,15 +201,40 @@ class __attribute__ ((visibility ("default"))) IasAvbVideoRingBuffer
     const std::string& getName() const { return mName; }
 
     /*!
-     * @brief Overwrite current content with zeros
+     * @brief Register a reader on the ringbuffer.
      *
-     * This method overwrites the current content of the ring buffer with zeros.
-     * Note: It does NOT change the read or writer pointer or the buffer fill level, it only zeros out
-     * the content. This can be used in error situations, when a buffer is completely filled and we
-     * are not able to insert another packet. It would lead to playback of old vidoe frames when sometimes later
-     * the client tries to read out samples from the buffer.
+     * As it's possible to have multiple readers reading a ringbuffer, it is necessary some
+     * coordination among them and the - single - writer. By registering a reader with the
+     * ringbuffer, ringbuffer becomes aware of that new reader, and can keep proper track of it.
+     * The id used here is expected on future beginAccess, endAccess and waitRead calls.
+     *
+     * @param[in] pid  An id for the reader - usually the thread id or process id for single thread readers.
+     *
+     * @returns        eIasRingBuffOk on success, otherwise an error code.
      */
-    void zeroOut();
+    IasVideoRingBufferResult addReader(pid_t pid);
+
+    /*!
+     * @brief Unregister a reader on the ringbuffer.
+     *
+     * After this call, future beginAccess, endAccess and waitRead calls will fail with
+     * eIasRingBuffInvalidParam.
+     *
+     * @param[in] pid  Previously registered reader id.
+     *
+     * @returns        eIasRingBuffOk on success, otherwise an error code.
+     */
+    IasVideoRingBufferResult removeReader(pid_t pid);
+
+    /*!
+     * @brief Time of writer last access to the ring buffer.
+     *
+     * Readers can check the liveliness of writer by ensuring this time doesn't
+     * get too distant from now.
+     *
+     * @returns Last access time in nanoseconds.
+     */
+    uint64_t getWriterLastAccess();
 
   private:
     /*!

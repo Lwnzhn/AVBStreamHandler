@@ -12,9 +12,9 @@
 
 #include "avb_helper/ias_visibility.h"
 #include "media_transport/avb_video_bridge/IasAvbVideoBridge.h"
+#include "avb_video_common/IasAvbVideoLog.hpp"
 #include "avb_video_bridge/IasAvbVideoSender.hpp"
 #include "avb_video_bridge/IasAvbVideoReceiver.hpp"
-
 
 namespace IasMediaTransportAvb {
 
@@ -24,6 +24,10 @@ extern "C"
 {
 #endif
 
+IAS_DSO_PUBLIC void ias_avbvideobridge_register_log_context(DltContext *dlt_context)
+{
+    IasAvbVideoLog::setDltContext(dlt_context);
+}
 
 IAS_DSO_PUBLIC ias_avbvideobridge_sender* ias_avbvideobridge_create_sender(const char* senderRole)
 {
@@ -134,6 +138,15 @@ IAS_DSO_PUBLIC ias_avbvideobridge_result ias_avbvideobridge_register_MpegTS_cb(i
   return res;
 }
 
+IAS_DSO_PUBLIC uint64_t ias_avbvideobridge_last_receiver_access(ias_avbvideobridge_receiver* inst)
+{
+  if (NULL != inst)
+  {
+    return reinterpret_cast<IasAvbVideoReceiver*>(inst)->getLastStreamWriteAccess();
+  }
+
+  return 0;
+}
 
 #if defined( __cplusplus )
 }

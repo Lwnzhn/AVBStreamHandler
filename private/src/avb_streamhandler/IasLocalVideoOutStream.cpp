@@ -183,10 +183,39 @@ IasAvbProcessingResult IasLocalVideoOutStream::writeLocalVideoBuffer(IasLocalVid
       result = pushPayload(packetMpegTs);
     }
   }
+  else
+  {
+    result = pushNull();
+  }
 
   return result;
 }
 
+IasAvbProcessingResult IasLocalVideoOutStream::pushNull()
+{
+  IasAvbProcessingResult result = eIasAvbProcOK;
+
+  IasAvbVideoRingBuffer *ringBuffer = mShmConnection.getRingBuffer();
+  if (nullptr == ringBuffer)
+  {
+    DLT_LOG_CXX(*mLog, DLT_LOG_ERROR, LOG_PREFIX, "Could not get IPC ring buffer");
+    result = eIasAvbProcErr;
+  }
+  else
+  {
+    uint32_t offset = 0u;
+    uint32_t numPackets = 0u; // We won't be sending any packets
+    void *basePtr = nullptr;
+
+    // We don't really care about errors here, no packet is being sent, after
+    // all. These are just to keep writer last access time on the ringBuffer
+    // updated, so readers can check reader is still alive
+    ringBuffer->beginAccess(eIasRingBufferAccessWrite, getpid(), &basePtr, &offset, &numPackets);
+    ringBuffer->endAccess(eIasRingBufferAccessWrite, getpid(), 0, 0);
+  }
+
+  return result;
+}
 
 IasAvbProcessingResult IasLocalVideoOutStream::pushPayload(PacketH264 const & packet)
 {
@@ -207,7 +236,7 @@ IasAvbProcessingResult IasLocalVideoOutStream::pushPayload(PacketH264 const & pa
     void *basePtr = nullptr;
     uint32_t numPacketsTransferred = 0u;
 
-    if (ringBuffer->beginAccess(eIasRingBufferAccessWrite, &basePtr, &offset, &numPackets))  // numPackets returned here is the overall numbers of packets available for read or write, but not more than requested
+    if (ringBuffer->beginAccess(eIasRingBufferAccessWrite, getpid(), &basePtr, &offset, &numPackets))  // numPackets returned here is the overall numbers of packets available for read or write, but not more than requested
     {
       // this could happen if multiple threads concurrently access the ring buffer in the same direction
       DLT_LOG_CXX(*mLog, DLT_LOG_WARN, LOG_PREFIX, "error in beginAccess of ring buffer");
@@ -231,7 +260,7 @@ IasAvbProcessingResult IasLocalVideoOutStream::pushPayload(PacketH264 const & pa
         numPacketsTransferred++;
       }
 
-      if (ringBuffer->endAccess(eIasRingBufferAccessWrite, offset, numPacketsTransferred))
+      if (ringBuffer->endAccess(eIasRingBufferAccessWrite, getpid(), offset, numPacketsTransferred))
       {
         DLT_LOG_CXX(*mLog, DLT_LOG_ERROR, LOG_PREFIX, "error in endAccess of sink ring buffer");
         result = eIasAvbProcErr;
@@ -266,7 +295,7 @@ IasAvbProcessingResult IasLocalVideoOutStream::pushPayload(PacketMpegTS const & 
     void *basePtr = nullptr;
     uint32_t numPacketsTransferred = 0u;
 
-    if (ringBuffer->beginAccess(eIasRingBufferAccessWrite, &basePtr, &offset, &numPackets))  // numPackets returned here is the overall numbers of packets available for read or write, but not more than requested
+    if (ringBuffer->beginAccess(eIasRingBufferAccessWrite, getpid(), &basePtr, &offset, &numPackets))  // numPackets returned here is the overall numbers of packets available for read or write, but not more than requested
     {
       // this could happen if multiple threads concurrently access the ring buffer in the same direction
       DLT_LOG_CXX(*mLog, DLT_LOG_WARN, LOG_PREFIX, "error in beginAccess of ring buffer");
@@ -291,7 +320,7 @@ IasAvbProcessingResult IasLocalVideoOutStream::pushPayload(PacketMpegTS const & 
         numPacketsTransferred++;
       }
 
-      if (ringBuffer->endAccess(eIasRingBufferAccessWrite, offset, numPacketsTransferred))
+      if (ringBuffer->endAccess(eIasRingBufferAccessWrite, getpid(), offset, numPacketsTransferred))
       {
         DLT_LOG_CXX(*mLog, DLT_LOG_ERROR, LOG_PREFIX, "error in endAccess of sink ring buffer");
         result = eIasAvbProcErr;

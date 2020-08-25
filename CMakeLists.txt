@@ -15,7 +15,11 @@ pkg_check_modules(DLT REQUIRED automotive-dlt-c++)
 
 add_subdirectory( deps/audio/common )
 
+set(GPTP_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-tree-vectorize" )
+
+#-----------------------------------------------------------
 # build igb_avb and gptp libraries and driver before searching for libraries
+#-----------------------------------------------------------
 execute_process( COMMAND make lib CFLAGS=-fPIC
                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/igb_avb
 )
@@ -23,16 +27,14 @@ execute_process( COMMAND make kmod
                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/igb_avb
 )
 
-execute_process( COMMAND make
+execute_process( COMMAND make CXXFLAGS=${GPTP_CXX_FLAGS}
                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/gptp/linux/build
 )
 
-
-
 # set release version for avb stream handler
-set( MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_MAJOR    0 )
-set( MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_MINOR    0 )
-set( MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_REVISION 1 )
+set( MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_MAJOR    1 )
+set( MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_MINOR    1 )
+set( MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_REVISION 0 )
 
 set( MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_STRING ${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_MAJOR}.${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_MINOR}.${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_REVISION})
 
@@ -73,7 +75,7 @@ endif()
 #------------------------------------------------------------------
 # avb_streamhandler main CMakeLists
 #------------------------------------------------------------------
-
+include(GNUInstallDirs)
 include( CMakeLists.lib_ptp_daemon.txt )
 include( CMakeLists.avb_helper.txt )
 include( CMakeLists.avb_streamhandler.txt )
@@ -84,6 +86,9 @@ include( CMakeLists.avb_clockdriver.txt )
 include( CMakeLists.avb_streamhandler_demo.txt )
 include( CMakeLists.avb_video_bridge.txt )
 include( CMakeLists.avb_video_debug_app.txt )
+include( CMakeLists.avb_watchdog.txt )
+include( CMakeLists.gst_avb_video_plugin.txt )
+include( CMakeLists.avb_streamhandler_app_socket.txt )
 
 #------------------------------------------------------------------
 #Include makefile building internal tools (only on host / not needed on target)
@@ -103,19 +108,39 @@ if (${IAS_IS_HOST_BUILD})
 endif()
 
 #------------------------------------------------------------------
+#Install
+#------------------------------------------------------------------
+install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/deps/gptp/linux/build/obj/daemon_cl DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(CODE "execute_process(COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/setcap.sh ${CMAKE_INSTALL_FULL_BINDIR}/daemon_cl)")
+
+set(INSTALL_LIBDIR ${CMAKE_INSTALL_FULL_LIBDIR}/alsa-lib)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/public/res/51-smartx.conf.in ${CMAKE_CURRENT_SOURCE_DIR}/public/res/51-smartx.conf @ONLY)
+
+if(ASOUND_VERSION VERSION_LESS 1.1.7)
+        set(ALSA_CONF_PATH "/usr/share/alsa/alsa.conf.d")
+else()
+        install(DIRECTORY DESTINATION /etc/alsa/conf.d)
+        set(ALSA_CONF_PATH "/etc/alsa/conf.d")
+endif()
+
+install(FILES  ${CMAKE_CURRENT_SOURCE_DIR}/public/res/51-smartx.conf DESTINATION ${ALSA_CONF_PATH})
+
+
+#------------------------------------------------------------------
 # create documentation for the whole stream handler here, referencing all relevant entities
 #------------------------------------------------------------------
-include(doxygen/ias_defines_doxygen.cmake)
+#include(doxygen/ias_defines_doxygen.cmake)
 
-IasCreateComponentDocumentation( media_transport avb_streamhandler ${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_MAJOR}
-                                                                   ${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_MINOR}
-                                                                   ${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_REVISION}
-  avb_configuration_reference
-  avb_clockdriver
-  avb_streamhandler
-  avb_streamhandler_api
-)
-IasCreateDoxygenTarget()
+#TODO Vince add doxygen for watchdog
+#IasCreateComponentDocumentation( media_transport avb_streamhandler ${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_MAJOR}
+#                                                                   ${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_MINOR}
+#                                                                   ${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_REVISION}
+#  avb_configuration_reference
+#  avb_clockdriver
+#  avb_streamhandler
+#  avb_streamhandler_api
+#)
+#IasCreateDoxygenTarget()
 #------------------------------------------------------------------
 #IasCreateBbRecipeFile( media_transport ias-mediatransport-avbstreamhandler ${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_MAJOR}
 #                                                                            ${MEDIA_TRANSPORT_AVB_STREAMHANDLER_VERSION_MINOR}

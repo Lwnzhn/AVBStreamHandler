@@ -33,9 +33,11 @@ add_executable( test_IasTestAvbStreamhandler
                 private/tst/avb_streamhandler/src/IasTestAvbConfigurationBase.cpp
                 private/tst/avb_streamhandler/src/IasTestAvbMain.cpp
                 private/tst/avb_streamhandler/src/IasTestAvbClockDriver.cpp
+                private/tst/avb_streamhandler/src/IasTestSystemdWatchdog.cpp
+                private/tst/avb_streamhandler/src/IasTestVideoRingBufferShm.cpp
                 )
 
-target_compile_options( test_IasTestAvbStreamhandler PRIVATE -Wno-error )
+target_compile_options( test_IasTestAvbStreamhandler PRIVATE -Wno-error -Wsign-conversion)
 
 #find_package(PkgConfig)
 #pkg_check_modules(DLT REQUIRED automotive-dlt)
@@ -48,6 +50,7 @@ if(${SANITIZERS_ON})
 endif()
 target_link_libraries( test_IasTestAvbStreamhandler dlt )
 target_link_libraries( test_IasTestAvbStreamhandler ias-media_transport-avb_streamhandler )
+target_link_libraries( test_IasTestAvbStreamhandler ias-media_transport-avb_watchdog )
 
 target_link_libraries( test_IasTestAvbStreamhandler boost_system )
 target_link_libraries( test_IasTestAvbStreamhandler boost_iostreams )

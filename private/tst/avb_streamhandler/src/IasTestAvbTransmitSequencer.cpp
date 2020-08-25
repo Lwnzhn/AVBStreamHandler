@@ -276,7 +276,11 @@ TEST_F(IasTestAvbTransmitSequencer, initBwRateNeg)
 
   std::string optName = std::string(IasRegKeys::cDebugXmitShaperBwRate) + IasAvbTSpec::getClassSuffix(srClass);
   mEnvironment->setConfigValue(optName, 101u);
-  mEnvironment->setConfigValue(IasRegKeys::cXmitUseWatchdog, 1u);
+  mEnvironment->setConfigValue(IasRegKeys::cUseWatchdog, 1u);
+  ASSERT_EQ(setenv("WATCHDOG_USEC", "30000000", 1), 0);
+  /* ASSERT is required here, otherwise init will fail */
+  ASSERT_EQ(eIasAvbProcOK, mEnvironment->createWatchdog());
+
   result = mSequencer->init(0u, srClass, false);
   ASSERT_EQ(eIasAvbProcOK, result);
 }
@@ -304,7 +308,7 @@ TEST_F(IasTestAvbTransmitSequencer, initBwRateWdog)
   IasAvbProcessingResult result = eIasAvbProcErr;
   IasAvbSrClass srClass = IasAvbSrClass::eIasAvbSrClassHigh;
 
-  mEnvironment->setConfigValue(IasRegKeys::cXmitUseWatchdog, 1u);
+  mEnvironment->setConfigValue(IasRegKeys::cUseWatchdog, 1u);
   mEnvironment->mUseWatchdog = true;
   ASSERT_TRUE(mEnvironment->isWatchdogEnabled());
   result = mSequencer->init(0u, srClass, false);

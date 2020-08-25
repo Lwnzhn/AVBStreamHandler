@@ -15,7 +15,7 @@ The Stream Handler ensures proper AVB packet generation following the IEEE1722 s
 The Stream Handler relies on an implementation of the IEEE802.1AS standard (gPTP) to establish a network-wide reference time base.
 
 @note Please note that this document describes the Reference System only.
-Customer specific manifestations may vary in their available components and features. For customer systems please refer to the documentation accompanying the customer delivery.
+User specific manifestations may vary in their available components and features. For user systems please refer to the documentation accompanying the user delivery.
 
 
 ###############################################################
@@ -36,7 +36,7 @@ The AVB Stream Handler provides the following features:
 * ALSA audio interfaces
 * Video streaming interfaces
 * CommonAPI control interface with D-Bus binding (SOME/IP to follow)
-* Configuration interface enabling the customer to provide its own configuration library
+* Configuration interface enabling the user to provide its own configuration library
 * Supported audio sample rates: 48 kHz and 24kHz
 * AVB audio format: _eIasAvbAudioFormatSaf16_ (AVTP 16 bit)
 * Audio format for ALSA interfaces: _eIasAvbAudioFormatSaf16_
@@ -93,7 +93,7 @@ It provides definitions for _targets_ which comprises target related definitions
 In addition so called _profiles_ are specified defining all variants of streams (including test streams) and registry entries as well.
 
 @note Since the configuration library is project specific, this documentation describes only the reference configuration, see section @ref configuration.
-For customer specific implementations please refer to the delivery documentation for avb_customer_config.
+For user specific implementations please refer to the delivery documentation for avb_customer_config.
 
 
 #################################################################################
@@ -205,7 +205,7 @@ When specifying a maximum of 3000 packets per second, than you'll get:
 ###############################################################
 @subsection class_c Using Stream Reservation Class C
 
-You may need to use a stream reservation class other than A and B. This new class is always called class C (customer specific).
+You may need to use a stream reservation class other than A and B. This new class is always called class C (user specific).
 The traffic streaming and the measurement interval must always be defined according to the amount of traffic that is needed.
 
 To enable Class C according to the AutoCDSFunctionalSpec from AVnu, the measurement interval needs to be set to **1333µs for 48 kHz and 64 samples per packet**
@@ -641,7 +641,7 @@ The ias-media\_transport-avb\_streamhandler-devel package contains a shared libr
 to facilitate the creation of a project-specific configuration plug-in. The library provides a base class that should be used to derive a project-specific class.
 For more information go to @ref configuration and @ref example_systems.
 
-A detailed description on creation of customer-specific libraries can be found in section @ref create_customer_config.
+A detailed description on creation of user-specific libraries can be found in section @ref create_customer_config.
 
 
 ###############################################################
@@ -674,7 +674,7 @@ Basically, the configuration plug-in serves three purposes:
    The configuration plug-in can access all parameters of the Stream Handler invocation that are on the right hand side of the keyword *setup*. The plug-in could also use any other mechanism available to determine configuration options. This includes environment variables, file access, etc. It is up to the plug-in's implementer to determine such mechanisms.
    This task should be done in the context of the passArguments() method that must be implemented by the configuration object.
 2. Set entries in the configuration registry.
-    The plug-in can set textual and/or numerical entries on a key->value basis in a registry database provided by the stream handler. Many settings of the Stream Handler can be controlled that way, the key names are provided in the public header file IasAvbRegistryKeys.hpp. Customers can also create their own keys in order to pass configuration options through to a clock library implementation.
+    The plug-in can set textual and/or numerical entries on a key->value basis in a registry database provided by the stream handler. Many settings of the Stream Handler can be controlled that way, the key names are provided in the public header file IasAvbRegistryKeys.hpp. Users can also create their own keys in order to pass configuration options through to a clock library implementation.
     This task should be done in the context of the passArguments() method that must be implemented by the configuration object. After passArguments() returns, no more entries can be added to the registry.
 3. Use the IasAvbStreamHandlerInterface API to set up the operating environment for the Stream Handler.
     Examples are creating AVB streams and local streams, connecting them and defining the operating parameters for clock recovery. Note that clock recovery settings can only be controlled by the configuration plug-in, not by the API.
@@ -1117,7 +1117,7 @@ receive.idlewait    | 50000000   | idlewait to 50 ms due to video data flow
 
 
 ###############################################################
-@subsection create_customer_config Creation of Customer Configuration Library
+@subsection create_customer_config Creation of User Configuration Library
 
 The PAE team provides customized configuration plug-ins for every variant needed.
 <!--todo to be filled with text -->
@@ -1238,7 +1238,7 @@ Overwrite some target settings, if the actual hardware needs values different fr
     $ ./avb_streamhandler_app setup --help
 
     --help or -h           display list of config module options
-    --profile or -p        specify customer profile context
+    --profile or -p        specify user profile context
     --target or -t         specify target hardware
     --ifname or -n         override target-specific network interface name (e.g. eth0)
     --numstreams or -a     limit number of simultaneous streams to less than listed in the table specified by --system
@@ -1275,6 +1275,55 @@ When starting the Stream Handler via *systemd* these variables are set by the se
 ![Figure: Sequence to create a transmit stream](./images/MSC_Avb_Control_Establish_Streams.png "Creating a network stream associated with a local source")
 ![Figure: Sequence to remove a transmit stream](./images/MSC_Avb_Control_Remove_Stream.png "Removing a network stream")
 
+#################################################################################
+@section watchdog Systemd Watchdog
+#################################################################################
+
+AVB streamhandler watchdog is built as a static library. Currently, 3
+AVB streamhandler threads - Transmit sequencer, Alsa Worker and Receive
+engine,  register themselves with the watchdog manager. These can be
+enabled by passing "-k watchdog.enable=1" to avb_streamhandler_demo.
+
+Since we're relying on Systemd watchdog to reset AVB streamhandler
+if any of the three threads stop resetting the watchdog timer, Systemd
+will reset the AVB Stream handler service, so AVB streamhandler needs
+to be run as a Systemd service. A sample Systemd service file is
+described below.
+
+* Systemd service file. Place this at /etc/systemd/system/avb.service
+```
+[Unit]
+Description=AVBSH for watchdog testing
+
+[Service]
+Type=simple
+Environment="LD_LIBRARY_PATH=$AVB_DEPS/lib/"
+ExecStart=<path to your AVB SH build dir>/avb_streamhandler_demo -c -v -s
+pluginias-media_transport-avb_configuration_reference.so setup --target
+GrMrb -p MRB_Slave_Audio -n enp4s0 -k watchdog.enable=1
+WatchdogSec=<timeout in seconds, so 30 for 30 seconds>
+Restart=always
+```
+
+* Start/stop or check the status of the AVB streamhandler service with:
+```
+ - sudo systemctl start avb.service
+ - sudo systemctl status avb.service
+ - sudo systemctl stop avb.service
+```
+
+* To view watchdog specific logs:
+```
+ - sudo journalctl -fu avb.service | grep watchdog
+```
+
+#################################################################################
+@section video_multi_client Video multi-client
+#################################################################################
+
+For video streams, on the listener side, AVB Stream Handler creates a bridge - basically, some shared memory that can be accessed by other process - to which applications that will consume the stream will connect to. Note that more than one application can connect to the same video stream. This allows different consumers for the stream - like an application that shows the video and another that records it.
+
+This feature is transparent to applications using the bridge. However, current implementation has one limitation: as application PID is used to track what reader application has read from the stream, one process can not have multiple threads connecting to the same stream. This should not be a problem, as this feature is usually intended for multiple processes connecting to the same stream.
 
 #################################################################################
 @section faq FAQ
